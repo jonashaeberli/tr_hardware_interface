@@ -1,0 +1,9 @@
+<library path="tr_hardware_interface">
+  <class name="tr_hardware_interface/MercuryHardware"
+         type="tr_hardware_interface::MercuryHardware"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      ros2_control hardware_interface
+    </description>
+  </class>
+</library>
