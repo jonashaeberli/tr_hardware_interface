@@ -1,3 +1,6 @@
+cmake_minimum_required(VERSION 3.8)
+project(tr_hardware_interface)
+
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
@@ -13,13 +16,14 @@ find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(odrive_communication REQUIRED)
 
 
 ## COMPILE
 add_library(
   ${PROJECT_NAME}
   SHARED
-  src/my_robot_hardware_interface.cpp
+  src/tr_hardware_interface.cpp
 )
 target_include_directories(
   ${PROJECT_NAME}
@@ -32,9 +36,10 @@ ament_target_dependencies(
   pluginlib
   rclcpp
   rclcpp_lifecycle
+  odrive_communication
 )
 
-pluginlib_export_plugin_description_file(hardware_interface my_robot_hardware_interface.xml)
+pluginlib_export_plugin_description_file(hardware_interface tr_hardware_interface.xml)
 
 # INSTALL
 install(
@@ -70,5 +75,6 @@ ament_export_dependencies(
   pluginlib
   rclcpp
   rclcpp_lifecycle
+  odrive_communication
 )
 ament_package()

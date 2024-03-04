@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "odrive_communication/ODrive.h"
 #include "hardware_interface/handle.hpp"
 #include "hardware_interface/hardware_info.hpp"
 #include "hardware_interface/system_interface.hpp"
@@ -47,6 +48,9 @@ private:
   // Store the command for the simulated robot
   std::vector<double> hw_commands_;
   std::vector<double> hw_states_;
+
+  ODrive::ODrive odrive_;
+
 };
 
 }  // namespace tr_hardware_interface
