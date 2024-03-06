@@ -1,58 +1,68 @@
-#ifndef TR_HARDWARE_INTERFACE__TR_SYSTEM_HPP_
-#define TR_HARDWARE_INTERFACE__TR_SYSTEM_HPP_
+#ifndef MERCURY_HARDWARE__MERCURY_HARDWARE_HPP_
+#define MERCURY_HARDWARE__MERCURY_HARDWARE_HPP_
 
-#include <memory>
-#include <string>
-#include <vector>
+#include "string"
+#include "unordered_map"
+#include "vector"
 
-#include "odrive_communication/ODrive.h"
 #include "hardware_interface/handle.hpp"
 #include "hardware_interface/hardware_info.hpp"
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
-#include "rclcpp/macros.hpp"
-#include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
-#include "rclcpp_lifecycle/state.hpp"
+#include "hardware_interface/types/hardware_interface_type_values.hpp"
 
+#include <odrive_communication/ODrive.h>
+
+using hardware_interface::return_type;
+
+namespace mercury_hardware
+{
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
-namespace tr_hardware_interface
-{
-class MercuryHardware : public hardware_interface::SystemInterface
+class HARDWARE_INTERFACE_PUBLIC MercuryHardware
+: public hardware_interface::SystemInterface
 {
 public:
-  RCLCPP_SHARED_PTR_DEFINITIONS(MercuryHardware);
-
   CallbackReturn on_init(const hardware_interface::HardwareInfo & info) override;
-
-  CallbackReturn on_configure(const rclcpp_lifecycle::State & previous_state) override;
 
   std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
 
   std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
 
-  CallbackReturn on_activate(const rclcpp_lifecycle::State & previous_state) override;
+  return_type read(const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
-  CallbackReturn on_deactivate(const rclcpp_lifecycle::State & previous_state) override;
+  return_type write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override;
 
-  hardware_interface::return_type read() override;
+protected:
 
-  hardware_interface::return_type write() override;
+  ODrive::ODrive Hndl;
 
-private:
-  // Parameters for the RRBot simulation
-  double hw_start_sec_;
-  double hw_stop_sec_;
-  double hw_slowdown_;
+/// Here we create two maps that store the values of the input command beeing sent to the controller and the values read from the controllers...
 
-  // Store the command for the simulated robot
-  std::vector<double> hw_commands_;
-  std::vector<double> hw_states_;
+  std::unordered_map<std::string, std::vector<std::double>> joint_command_interfaces = {
+    {"position", {}}, {"velocity", {}}, {"acceleration", {}}};
 
-  ODrive::ODrive odrive_;
+  std::unordered_map<std::string, std::vector<std::double>> joint_interfaces = {
+    {"position", {}}, {"velocity", {}}, {"acceleration", {}}};
+
+  union
+  {
+    float f;
+    uint32_t u;
+  }punning_position;
+
+  union
+  {
+    float f;
+    uint32_t u;
+  }punning_velocity;
+
+  typedef struct {
+    uint32_t Position;
+    uint32_t Velocity;
+  }EncoderEstimates;
 
 };
+}  // namespace mercury_hardware
 
-}  // namespace tr_hardware_interface
-
-#endif 
+#endif  // MERCURY_HARDWARE__MERCURY_HARDWARE_HPP_

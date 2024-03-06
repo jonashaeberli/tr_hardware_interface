@@ -1,219 +1,121 @@
 #include "tr_hardware_interface/tr_hardware_interface.hpp"
 
-#include <chrono>
-#include <cmath>
-#include <limits>
-#include <memory>
+#include <string>
 #include <vector>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 
-namespace tr_hardware_interface
+nnamespace tr_hardware_interface
 {
-CallbackReturn MercuryHardware::on_init(
-  const hardware_interface::HardwareInfo & info)
+CallbackReturn MercuryHardware::on_init(const hardware_interface::HardwareInfo & info)
 {
   if (hardware_interface::SystemInterface::on_init(info) != CallbackReturn::SUCCESS)
   {
     return CallbackReturn::ERROR;
   }
+ 
+  // robot has 6 joints and therefore we inistialize for every key a vector with 6 values
+  const int vectorSize = 6; // Size of the vector
 
-  // START: This part here is for exemplary purposes - Please do not copy to your production code
-  hw_start_sec_ = stod(info_.hardware_parameters["example_param_hw_start_duration_sec"]);
-  hw_stop_sec_ = stod(info_.hardware_parameters["example_param_hw_stop_duration_sec"]);
-  hw_slowdown_ = stod(info_.hardware_parameters["example_param_hw_slowdown"]);
-  // END: This part here is for exemplary purposes - Please do not copy to your production code
-  hw_states_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
-  hw_commands_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
+  // Initialize vectors with default values
+  for (auto& entry : joint_command_interfaces) {
+    entry.second.assign(vectorSize, 0.0);
+  }
 
-  for (const hardware_interface::ComponentInfo & joint : info_.joints)
+  for (auto& entry : joint_interfaces) {
+    entry.second.assign(vectorSize, 0.0);
+  }
+
+  for (const auto & joint : info_.joints)
   {
-    // RRBotSystemPositionOnly has exactly one state and command interface on each joint
-    if (joint.command_interfaces.size() != 1)
+    for (const auto & interface : joint.state_interfaces)
     {
-      RCLCPP_FATAL(
-        rclcpp::get_logger("MercuryHardware"),
-        "Joint '%s' has %zu command interfaces found. 1 expected.", joint.name.c_str(),
-        joint.command_interfaces.size());
-      return CallbackReturn::ERROR;
-    }
-
-    if (joint.command_interfaces[0].name != hardware_interface::HW_IF_POSITION)
-    {
-      RCLCPP_FATAL(
-        rclcpp::get_logger("MercuryHardware"),
-        "Joint '%s' have %s command interfaces found. '%s' expected.", joint.name.c_str(),
-        joint.command_interfaces[0].name.c_str(), hardware_interface::HW_IF_POSITION);
-      return CallbackReturn::ERROR;
-    }
-
-    if (joint.state_interfaces.size() != 1)
-    {
-      RCLCPP_FATAL(
-        rclcpp::get_logger("MercuryHardware"),
-        "Joint '%s' has %zu state interface. 1 expected.", joint.name.c_str(),
-        joint.state_interfaces.size());
-      return CallbackReturn::ERROR;
-    }
-
-    if (joint.state_interfaces[0].name != hardware_interface::HW_IF_POSITION)
-    {
-      RCLCPP_FATAL(
-        rclcpp::get_logger("MercuryHardware"),
-        "Joint '%s' have %s state interface. '%s' expected.", joint.name.c_str(),
-        joint.state_interfaces[0].name.c_str(), hardware_interface::HW_IF_POSITION);
-      return CallbackReturn::ERROR;
+      joint_interfaces[interface.name].push_back(joint.name);
     }
   }
 
   return CallbackReturn::SUCCESS;
 }
 
-CallbackReturn MercuryHardware::on_configure(
-    const rclcpp_lifecycle::State &previous_state) {
-  // START: This part here is for exemplary purposes - Please do not copy to
-  // your production code
-
-  // prevent unused variable warning
-  auto prev_state = previous_state;
-  RCLCPP_INFO(rclcpp::get_logger("MercuryHardware"),
-              "Configuring ...please wait...");
-
-  for (int i = 0; i < hw_start_sec_; i++) {
-    rclcpp::sleep_for(std::chrono::seconds(1));
-    RCLCPP_INFO(rclcpp::get_logger("MercuryHardware"),
-                "%.1f seconds left...", hw_start_sec_ - i);
-  }
-  // END: This part here is for exemplary purposes - Please do not copy to your
-  // production code
-
-  // reset values always when configuring hardware
-  for (uint i = 0; i < hw_states_.size(); i++) {
-    hw_states_[i] = 0;
-    hw_commands_[i] = 0;
-  }
-
-  RCLCPP_INFO(rclcpp::get_logger("MercuryHardware"),
-              "Successfully configured!");
-
-  return CallbackReturn::SUCCESS;
-}
-
-std::vector<hardware_interface::StateInterface>
-MercuryHardware::export_state_interfaces()
+std::vector<hardware_interface::StateInterface> MercuryHardware::export_state_interfaces()
 {
   std::vector<hardware_interface::StateInterface> state_interfaces;
-  for (uint i = 0; i < info_.joints.size(); i++)
+
+  int ind = 0;
+  for (const auto & joint_name : joint_interfaces["position"])
   {
-    state_interfaces.emplace_back(hardware_interface::StateInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_states_[i]));
+    state_interfaces.emplace_back(joint_name, "position", &joint_position_[ind++]);
+  }
+
+  ind = 0;
+  for (const auto & joint_name : joint_interfaces["velocity"])
+  {
+    state_interfaces.emplace_back(joint_name, "velocity", &joint_velocities_[ind++]);
+  }
+
+  ind = 0;
+  for (const auto & joint_name : joint_interfaces["acceleration"])
+  {
+    state_interfaces.emplace_back(joint_name, "acceleration", &joint_velocities_[ind++]);
   }
 
   return state_interfaces;
 }
 
-std::vector<hardware_interface::CommandInterface>
-MercuryHardware::export_command_interfaces()
+std::vector<hardware_interface::CommandInterface> MercuryHardware::export_command_interfaces()
 {
   std::vector<hardware_interface::CommandInterface> command_interfaces;
-  for (uint i = 0; i < info_.joints.size(); i++)
+
+  int ind = 0;
+  for (const auto & joint_name : joint_command_interfaces["position"])
   {
-    command_interfaces.emplace_back(hardware_interface::CommandInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_commands_[i]));
+    command_interfaces.emplace_back(joint_name, "position", &joint_position_command_[ind++]);
+  }
+
+  ind = 0;
+  for (const auto & joint_name : joint_command_interfaces["velocity"])
+  {
+    command_interfaces.emplace_back(joint_name, "velocity", &joint_velocities_command_[ind++]);
+  }
+
+  ind = 0;
+  for (const auto & joint_name : joint_command_interfaces["acceleration"])
+  {
+    command_interfaces.emplace_back(joint_name, "acceleration", &joint_velocities_command_[ind++]);
   }
 
   return command_interfaces;
 }
 
-CallbackReturn MercuryHardware::on_activate(
-  const rclcpp_lifecycle::State & /*previous_state*/)
+return_type MercuryHardware::read(const rclcpp::Time & /*time*/, const rclcpp::Duration & period)
 {
-  // START: This part here is for exemplary purposes - Please do not copy it to your production code
-  RCLCPP_INFO(
-    rclcpp::get_logger("MercuryHardware"), "Activating ...please wait...");
+    for (int i = 0; i < 6; i++) {
+      EncoderEstimates estimates = Hndl.GetEncoderEstimate(i);
 
-  for (int i = 0; i < hw_start_sec_; i++)
-  {
-    rclcpp::sleep_for(std::chrono::seconds(1));
-    RCLCPP_INFO(
-      rclcpp::get_logger("MercuryHardware"), "%.1f seconds left...",
-      hw_start_sec_ - i);
-  }
-  // END: This part here is for exemplary purposes - Please do not copy to your production code
+      punning_position.u = estimates.Position;
+      punning_velocity.u = estimates.Velocity;
 
-  // command and state should be equal when starting
-  for (uint i = 0; i < hw_states_.size(); i++)
-  {
-    hw_commands_[i] = hw_states_[i];
-  }
+      joint_interfaces["position"][i] = punning_position.f / 100;
+      joint_interfaces["velocity"][i] = punning_velocity.f / 100;
+    }
 
-  RCLCPP_INFO(rclcpp::get_logger("MercuryHardware"), "Successfully activated!");
-
-  return CallbackReturn::SUCCESS;
+  return return_type::OK;
 }
 
-CallbackReturn MercuryHardware::on_deactivate(
-  const rclcpp_lifecycle::State & /*previous_state*/)
+return_type MercuryHardware::write(const rclcpp::Time &, const rclcpp::Duration &)
 {
-  // START: This part here is for exemplary purposes - Please do not copy to your production code
-  RCLCPP_INFO(
-    rclcpp::get_logger("MercuryHardware"), "Deactivating ...please wait...");
+  for (int i = 0; i < 6; i++) {
+    double punning_position.f = joint_command_interfaces["position"][i] * 100;
+    double punning_velocity.f = joint_command_interfaces["velocity"][i] * 100;
+    double punning_acceleration.f = joint_command_interfaces["acceleration"][i] * 100;
 
-  for (int i = 0; i < hw_stop_sec_; i++)
-  {
-    rclcpp::sleep_for(std::chrono::seconds(1));
-    RCLCPP_INFO(
-      rclcpp::get_logger("MercuryHardware"), "%.1f seconds left...",
-      hw_stop_sec_ - i);
+    Hndl.SetInputPos(i, punning_position.u, punning_velocity.u, punning_acceleration.u);
   }
-
-  RCLCPP_INFO(rclcpp::get_logger("MercuryHardware"), "Successfully deactivated!");
-  // END: This part here is for exemplary purposes - Please do not copy to your production code
-
-  return CallbackReturn::SUCCESS;
+  return return_type::OK;
 }
 
-hardware_interface::return_type MercuryHardware::read()
-{
-  // START: This part here is for exemplary purposes - Please do not copy to your production code
-  RCLCPP_INFO(rclcpp::get_logger("MercuryHardware"), "Reading...");
-
-  for (uint i = 0; i < hw_states_.size(); i++)
-  {
-    // Simulate RRBot's movement
-    hw_states_[i] = hw_states_[i] + (hw_commands_[i] - hw_states_[i]) / hw_slowdown_;
-    RCLCPP_INFO(
-      rclcpp::get_logger("MercuryHardware"), "Got state %.5f for joint %d!",
-      hw_states_[i], i);
-  }
-  RCLCPP_INFO(rclcpp::get_logger("MercuryHardware"), "Joints successfully read!");
-  // END: This part here is for exemplary purposes - Please do not copy to your production code
-
-  return hardware_interface::return_type::OK;
-}
-
-hardware_interface::return_type MercuryHardware::write()
-{
-  // START: This part here is for exemplary purposes - Please do not copy to your production code
-  RCLCPP_INFO(rclcpp::get_logger("MercuryHardware"), "Writing...");
-
-  for (uint i = 0; i < hw_commands_.size(); i++)
-  {
-    // Simulate sending commands to the hardware
-    RCLCPP_INFO(
-      rclcpp::get_logger("MercuryHardware"), "Got command %.5f for joint %d!",
-      hw_commands_[i], i);
-  }
-  RCLCPP_INFO(
-    rclcpp::get_logger("MercuryHardware"), "Joints successfully written!");
-  // END: This part here is for exemplary purposes - Please do not copy to your production code
-
-  return hardware_interface::return_type::OK;
-}
-
-
-} // namespace tr_hardware_interface
+}  // namespace tr_hardware_interface
 
 #include "pluginlib/class_list_macros.hpp"
 
