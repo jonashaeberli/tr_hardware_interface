@@ -6,7 +6,7 @@
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 
-nnamespace tr_hardware_interface
+namespace tr_hardware_interface
 {
 CallbackReturn MercuryHardware::on_init(const hardware_interface::HardwareInfo & info)
 {
@@ -15,17 +15,10 @@ CallbackReturn MercuryHardware::on_init(const hardware_interface::HardwareInfo &
     return CallbackReturn::ERROR;
   }
  
-  // robot has 6 joints and therefore we inistialize for every key a vector with 6 values
-  const int vectorSize = 6; // Size of the vector
-
-  // Initialize vectors with default values
-  for (auto& entry : joint_command_interfaces) {
-    entry.second.assign(vectorSize, 0.0);
-  }
-
-  for (auto& entry : joint_interfaces) {
-    entry.second.assign(vectorSize, 0.0);
-  }
+  // robot has 6 joints and 2 interfaces
+  joint_position_.assign(6, 0);
+  joint_velocities_.assign(6, 0);
+  joint_position_command_.assign(6, 0);
 
   for (const auto & joint : info_.joints)
   {
@@ -62,16 +55,15 @@ std::vector<hardware_interface::CommandInterface> MercuryHardware::export_comman
   std::vector<hardware_interface::CommandInterface> command_interfaces;
 
   int ind = 0;
-  for (const auto & joint_name : joint_command_interfaces["position"])
+  for (const auto & joint_name : joint_interfaces["position"])
   {
     command_interfaces.emplace_back(joint_name, "position", &joint_position_command_[ind++]);
-  }
   }
 
   return command_interfaces;
 }
 
-return_type MercuryHardware::read(const rclcpp::Time & /*time*/, const rclcpp::Duration & period)
+return_type MercuryHardware::read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
     for (int i = 0; i < 6; i++) {
       EncoderEstimates estimates = Hndl.GetEncoderEstimate(i);
@@ -79,8 +71,8 @@ return_type MercuryHardware::read(const rclcpp::Time & /*time*/, const rclcpp::D
       punning_position.u = estimates.Position;
       punning_velocity.u = estimates.Velocity;
 
-      joint_interfaces["position"][i] = punning_position.f / 100;
-      joint_interfaces["velocity"][i] = punning_velocity.f / 100;
+      joint_position_[i] = (punning_position.f - joint_zeros[i]) / 15.91549;
+      joint_velocities_[i] = (punning_velocity.f / 100) * 6.28318;
     }
 
   return return_type::OK;
@@ -89,9 +81,9 @@ return_type MercuryHardware::read(const rclcpp::Time & /*time*/, const rclcpp::D
 return_type MercuryHardware::write(const rclcpp::Time &, const rclcpp::Duration &)
 {
   for (int i = 0; i < 6; i++) {
-    double punning_position.f = joint_command_interfaces["position"][i] * 100;
+    punning_position.f = (joint_position_command_[i] * 15.91549) + joint_zeros[i];
 
-    Hndl.SetInputPos(i, punning_position.u, punning_velocity.u, punning_acceleration.u);
+    Hndl.SetInputPos(i, punning_position.u, 0, 0);
   }
   return return_type::OK;
 }

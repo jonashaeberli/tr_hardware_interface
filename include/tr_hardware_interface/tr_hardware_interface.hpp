@@ -15,7 +15,7 @@
 
 using hardware_interface::return_type;
 
-namespace mercury_hardware
+namespace tr_hardware_interface
 {
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
@@ -34,16 +34,15 @@ public:
   return_type write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override;
 
 protected:
+  /// The size of this vector is (standard_interfaces_.size() x nr_joints)
+  std::vector<double> joint_position_command_;
+  std::vector<double> joint_position_;
+  std::vector<double> joint_velocities_;
 
   ODrive::ODrive Hndl;
 
-/// Here we create two maps that store the values of the input command beeing sent to the controller and the values read from the controllers...
-
-  std::unordered_map<std::string, std::vector<std::double>> joint_command_interfaces = {
-    {"position", {}}, {"velocity", {}}, {"acceleration", {}}};
-
-  std::unordered_map<std::string, std::vector<std::double>> joint_interfaces = {
-    {"position", {}}, {"velocity", {}}, {"acceleration", {}}};
+  std::unordered_map<std::string, std::vector<std::string>> joint_interfaces = {
+    {"position", {}}, {"velocity", {}}};
 
   union
   {
@@ -57,12 +56,9 @@ protected:
     uint32_t u;
   }punning_velocity;
 
-  typedef struct {
-    uint32_t Position;
-    uint32_t Velocity;
-  }EncoderEstimates;
+  std::vector<float> joint_zeros = {9.75, 6.8, -24.75, 0, 1, 0};
 
 };
-}  // namespace mercury_hardware
+}  // namespace tr_hardware_interface
 
 #endif  // MERCURY_HARDWARE__MERCURY_HARDWARE_HPP_
